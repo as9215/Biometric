@@ -1,0 +1,180 @@
+import scipy.ndimage
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import os
+import sys
+sys.setrecursionlimit(250000)
+
+BLACK_VALUE = .5
+"""
+os.system('rm ~/Documents/test.txt')
+os.system('touch ~/Documents/test.txt')
+
+command = 'echo \' \' > ~/Documents/test.txt'
+for i in image_array:
+	line = ''
+	for j in i:
+		line = line + str(j)
+	command = 'echo \'' + line + '\' >> ~/Documents/test.txt'	
+	os.system(command)
+"""
+
+def detectBlackLines(i, j, image_array):  
+	#print("scanning: i = ", i, "\n\t j = ", j)
+	lstFound = []
+	#print(image_array)
+	if image_array[i][j] ==  1:
+	    return image_array
+	if image_array[i][j] < BLACK_VALUE and image_array[i][j] > 0 and i != 1 and i != 511 and j != 1 and j != 511:
+		lstBlackLines = []
+		lstFound.append((i, j))
+		if (image_array[i + 1][j + 1] < BLACK_VALUE and image_array[i + 1][j + 1] > 0):
+			lstBlackLines.append((i + 1, j + 1))
+		if (image_array[i + 1][j] < BLACK_VALUE and image_array[i + 1][j] > 0):
+			lstBlackLines.append((i + 1, j))
+		if (image_array[i + 1][j - 1] < BLACK_VALUE and image_array[i + 1][j - 1] > 0):
+			lstBlackLines.append((i + 1, j - 1))
+		if (image_array[i][j + 1] < BLACK_VALUE and image_array[i][j + 1] > 0):
+			lstBlackLines.append((i, j + 1))
+		if (image_array[i][j - 1] < BLACK_VALUE and image_array[i][j - 1] > 0):
+			lstBlackLines.append((i, j - 1))
+		if (image_array[i - 1][j + 1] < BLACK_VALUE and image_array[i - 1][j + 1] > 0):
+			lstBlackLines.append((i - 1, j + 1))
+		if (image_array[i - 1][j] < BLACK_VALUE and image_array[i - 1][j] > 0):
+			lstBlackLines.append((i - 1, j))
+		if (image_array[i - 1][j - 1] < 0.5 and image_array[i - 1][j - 1] > 0):
+			lstBlackLines.append((i - 1, j - 1))
+		image_array[i][j] = 1
+		for i in lstBlackLines:
+			detectBlackLines(i[0],i[1], image_array)
+		return image_array
+	return []
+
+def calculateMedian(image_array):
+    xList = []
+    yList = []
+    for i in range(len(image_array)):
+        for j in range(len(image_array[i])):
+            if image_array[i][j] < 0.5:
+                xList.append(i)
+                yList.append(j)
+    xList = sorted(xList)
+    yList = sorted(yList)
+    if xList == []:
+        xList = [0]
+        yList = [0]
+    return xList, yList, (xList[len(xList)//2], yList[len(yList)//2])
+    
+def isWithinStandardDeviation(xList, yList):
+    meanX = sum(xList)/len(xList)
+    meanY = sum(yList)/len(yList)
+    sd_x = 0
+    sd_y = 0
+    for i in range (len(xList)):
+        sd_x += (xList[i] - meanX) ** 2
+        sd_y += (yList[i] - meanY) ** 2
+    return (sd_x / len(xList)) ** (1/2), (sd_y / len(yList)) ** (1/2)
+
+def means(xList, yList):
+    if xList == []:
+        xList = [0]
+        yList = [0]
+    return (sum(xList) / len(xList), sum(yList) / len(yList))
+
+def main():
+    org_img = '/home/lab04/Downloads/NISTSpecialDatabase4GrayScaleImagesofFIGS/sd04/png_txt/test/success/match_01/'
+    org_img_list = sorted(os.listdir(org_img))
+    cpy_img = '/home/lab04/Downloads/NISTSpecialDatabase4GrayScaleImagesofFIGS/sd04/png_txt/test/success/match_02/'
+    cpy_img_list = sorted(os.listdir(cpy_img))
+    
+    medianResults = []
+    sdResults = []
+    meansResults = []
+    hybrid = []
+    for fileNum in range(len(org_img_list)):
+        org_img_path = org_img + org_img_list[fileNum]
+        cpy_img_path = cpy_img + cpy_img_list[fileNum]
+        paths = [org_img_path, cpy_img_path]
+        
+        stats = []
+        meansList = []
+        sd_x = 0
+        sd_y = 0
+        for k in range(len(paths)):
+            image_path = paths[k]
+            #print(image_path)
+            gray_image = mpimg.imread(image_path, format='png')
+            name = image_path.split('/')[-1]
+            image_array = np.array(gray_image)
+            #print(image_array)
+            for i in range(1, 512):
+                #print("entered row ", i, " of 512")
+                print(str(100 * (i) / (3 * 512))[:5], "% done\t", name)
+                for j in range(1, 512):
+                    arr = detectBlackLines(i, j, image_array)
+                    if len(arr) > 0:
+                        image_array = arr
+                        #print("broke out of row ", i, " of 512")
+                        break
+            for j in range(1, 512):
+                #print("entered row ", i, " of 512")
+                print(str(100 * (j + 512) / (3 * 512))[:5], "% done\t", name)
+                for i in range(1, 512):
+                    arr = detectBlackLines(i, j, image_array)
+                    if len(arr) > 0:
+                        image_array = arr
+                        #print("broke out of row ", i, " of 512")
+                        break
+            for i in range(1, 512):
+                #print("entered row ", i, " of 512")\
+                print(str(100 * (j + 2 * 512) / (3 * 512))[:5], "% done\t", name)
+                for j in range(511, 1, -1):
+                    arr = detectBlackLines(i, j, image_array)
+                    if len(arr) > 0:
+                        image_array = arr
+                        #print("broke out of row ", i, " of 512")
+                        break
+            xList, yList, medians = calculateMedian(image_array)
+            stats.append(medians)
+            if k == 0:
+                sd_x, sd_y = isWithinStandardDeviation(xList, yList)
+            meansList.append(means(xList, yList))
+        if abs(stats[0][0] - stats[0][1]) < 0.15 * 512 and abs(stats[1][0] - stats[1][1]) < 0.15 * 512:
+            print("median: match detected\t", stats)
+            medianResults.append(0)
+        else:
+            print("median: match not found\t", stats)
+            medianResults.append(1)
+        if abs(meansList[0][0] - meansList[0][1]) - 2 * sd_x < 0 and \
+        abs(meansList[1][0] - meansList[1][1])  - 2 * sd_y < 0:
+            print("sd: match detected")
+            sdResults.append(0)
+        else:
+            print("sd: match not found")
+            sdResults.append(1)
+        if abs(meansList[0][0] - meansList[0][1]) < 0.15 * 512 and \
+        abs(meansList[1][0] - meansList[1][1]) < 0.15 * 512:
+            print("means: match detected")
+            meansResults.append(0)
+        else:
+            print("means: match not found")
+            meansResults.append(1)
+        if medianResults[-1] or (abs(meansList[0][0] - meansList[0][1]) - .25 * sd_x < 0 and \
+        abs(meansList[1][0] - meansList[1][1])  - .25 * sd_y < 0) :
+            print("hybrid: match detected")
+            hybrid.append(0)
+        else:
+            print("hybrid: match not found")
+            hybrid.append(1)
+        
+        
+    print("median avg: ", sum(medianResults) / len(medianResults))
+    print("sd avg: ", sum(sdResults) / len(sdResults))
+    print("mean avg: ", sum(meansResults) / len(meansResults))
+    print("hybrid avg: ", sum(hybrid) / len(hybrid))
+        
+    
+if __name__=="__main__":
+	main()
+					
